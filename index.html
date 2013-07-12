@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title></title>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <script src="js/jquery-1.9.1.min.js"></script>
+        <script src="js/jquery-ui.js"></script>
+        <link rel="stylesheet" href="css/jquery-ui.css" />
+        <script src="https://ajax.aspnetcdn.com/ajax/jquery.dataTables/1.9.4/jquery.dataTables.min.js"></script>
+        <script src="js/ocanvas.min.js"></script>
+        <link rel="stylesheet" type="text/css" href="css/demo_table.css">
+        <link rel="stylesheet" type="text/css" href="css/style.css">
+        <script>
+            var API_KEY = 'KtnrHgrg1IoAcZ5AXxjdH53AjHc6-0wr';
+            var BASE_URL = 'https://api.mongolab.com/api/1/databases/officemanager/collections/Devices';
+            var INPUT = '';
+            var TEXTFIELD;
+            var TEXTBOX;
+            var OLDTEXT = '';
+            var data = [];
+            var ITEMCOUNT = 0;
+            var availableTags = [
+                'Gilbert',
+                'Mesa'
+            ];
+            
+            var findTableRowById = function( id ) {
+                var numberOfRows = $('#dataTable').dataTable().fnGetNodes().length;
+                for( var i = 0; i < numberOfRows; i++ ) {
+                    var row = $('#dataTable').dataTable().fnGetData(i);
+                    if( row[0] === id ) {
+                        return i;
+                    }
+                }
+            };
+            var updateDBRow = function(id, type ) {
+                var rowIndex = findTableRowById(id);
+                var rowData = $('#dataTable').dataTable().fnGetData(rowIndex);
+                var obj = JSON.stringify({ 
+                    "Name": rowData[1],
+                    "Type" : rowData[2], 
+                    "IP" : rowData[3],
+                    "Location" : rowData[4], 
+                    "Cleaned" : rowData[5],
+                    "Notes" : rowData[6],
+                    "x" : rowData[7], 
+                    "y": rowData[8]
+                });
+                
+                if( type === "POST" ) {
+                    obj = JSON.stringify({
+                        "_id": rowData[0],
+                        "Name": rowData[1],
+                        "Type" : rowData[2], 
+                        "IP" : rowData[3],
+                        "Location" : rowData[4], 
+                        "Cleaned" : rowData[5],
+                        "Notes" : rowData[6],
+                        "x" : rowData[7], 
+                        "y": rowData[8]
+                    });
+                }
+                
+                var url = BASE_URL + '?apiKey=' + API_KEY;
+                //Update a document
+                $.ajax( { 
+                    url: url + "&q={'_id': '" + rowData[0] + "'}",
+                    data: obj,
+                    type: type,
+                    contentType: "application/json" 
+                });  
+            };                
+            $(document).ready(function() {
+                var body = $(document.body);
+                body.width = $(window).innerWidth();
+                body.height = $(window).innerHeight();
+                $('.editItem').hide();
+                $('#tableContainer').hide();
+                // $('#gilbert')
+                //     .button()
+                //     .click(function( event ) {
+                //         initializeMap();
+                // });
+                $('#list').button().click(function( event ) {
+                    if( $('#tableContainer').is(":visible") ) {
+                        $('#tableContainer').hide();
+                    }
+                    else {
+                        $('#tableContainer').show();
+                    };
+                });
+                    
+                $('#CreateComputer').draggable({
+                    containment: "body", scroll: false,
+                    helper: "clone",
+                    stop: function( event, ui ) {
+                        setClone(event, ui);
+                    }
+                });
+                    
+                $('#CreateScanner').draggable({             
+                    containment: "body", scroll: false,
+                    helper: "clone",
+                    stop: function( event, ui ) {
+                        setClone(event, ui);
+                    }
+                });
+                    
+                $('#CreatePrinter').draggable({
+                    containment: "body", scroll: false,
+                    helper: "clone",
+                    stop: function( event, ui ) {
+                        setClone(event, ui);
+                    }
+                });
+                 $( "#trash" ).droppable({
+                    hoverClass: "highlight",
+                    drop: function( event, ui ) {
+                        var id = ui.draggable[0].id;
+                        deleteItem(id);
+                    }
+                });
+                /*
+                *   DataTable
+                */
+                $('#dataTable').dataTable( {
+                    "aaData": data,
+                    "aoColumns": [
+                        { "sTitle": "_id", bVisible: false},
+                        { "sTitle": "Name", sWidth: '100px' },
+                        { "sTitle": "Type", sWidth: '50px', sClass: "center" },
+                        { "sTitle": "IP", sWidth: '80px' },
+                        { "sTitle": "Location", sWidth: '100px', "sClass": "center" },
+                        { "sTitle": "Cleaned", sWidth: '100px', "sClass": "center"},
+                        { "sTitle": "Notes", sWidth: '300px'},
+                        { "sTitle": "x", bSearchable: false, bVisible: false},
+                        { "sTitle": "y", bSearchable: false, bVisible: false}
+                    ]} 
+                );   
+                $('#tableContainer').draggable({containment: "body", scroll: false});
+                var container = $("#tableContainer");
+                container.offset({ left: $(window).width() / 2 - (container.width() / 2)  });
+                initializeMap();
+            });
+            var deleteItem = function( id ) {
+                //remove from view
+                $('#' + id).remove();
+                
+                //remove from table
+                $('#dataTable').dataTable().fnDeleteRow(findTableRowById(id));
+                
+                //remove from db
+                $.ajax( { url: BASE_URL + "/" + id + "?apiKey=" + API_KEY,
+                  type: "DELETE",
+                  async: true,
+                  timeout: 300000,
+                  success: function (data) { },
+                  error: function (xhr, status, err) { } } 
+                );
+            }
+            var setClone = function( event, ui ) {
+                var type = ui.helper[0].classList[0];
+                var id = type + ITEMCOUNT;
+                var x = ui.helper.offset().left;
+                var y = ui.helper.offset().top;
+                
+                addItem(type, id, x, y);
+            };
+            var updatePosition = function(id) {
+                var row = findTableRowById(id);
+                $('#dataTable').dataTable().fnUpdate($('#' + id).position().left, row, 7);
+                $('#dataTable').dataTable().fnUpdate($('#' + id).position().top, row, 8);
+                updateDBRow(id, "PUT");
+            };
+            var showEditMenu = function(id) {
+                var item = $('#' + id + '_EDIT');
+                if( item.is(":visible") ) {
+                    item.hide();
+                }
+                else {
+                    $('.editItem').hide();
+                    item.show();
+                }
+            };
+            var addItem = function(type, id, x, y, data) {
+                //creating img
+                var icon = document.createElement('img');
+                icon.setAttribute('src', 'images/' + type + '.png');                            
+                icon.setAttribute('id', id);                            
+                icon.setAttribute('class', 'item');
+                $('#itemContainer').append(icon);
+                
+                //Position
+                $('#' + id ).css({
+                    top: y, 
+                    left: x
+                });
+                
+                //Edit window
+                $('#editItemDefault').clone().attr('id', id + '_EDIT').appendTo($('#itemContainer'));
+                $('#' + id + '_EDIT' + ' #nameInputDefault').attr('id', 'name' + id);
+                $('#' + id + '_EDIT' + ' #ipInputDefault').attr('id', 'ip' + id);
+                $('#' + id + '_EDIT' + ' #locationInputDefault').attr('id', 'location' + id);
+                $('#' + id + '_EDIT' + ' input.datePicker').attr('id', 'cleaned' + id);
+                $('#' + id + '_EDIT' + ' #noteInputDefault').attr('id', 'note' + id);
+    
+                //Edit Position
+                $('#' + id + '_EDIT' ).css({
+                    top: y - 255, 
+                    left: x + 25
+                });
+                
+                // Functions
+                $('#' + id).dblclick(function (event) {
+                    showEditMenu(id);
+                });
+                
+                $('#' + id ).draggable({
+                    containment: "body", scroll: false,
+                    start: function( event, ui ) {
+                        var item = $('#' + id + '_EDIT');
+                        if( item.is(":visible") ) {
+                            showEditMenu(id);  
+                        }
+                    },
+                    stop: function( event, ui ) {
+                        var _x = $('#' + id).offset().left;
+                        var _y = $('#' + id).offset().top;
+                        $('#dataTable').dataTable().fnUpdate( _x, findTableRowById(id), 7 );
+                        $('#dataTable').dataTable().fnUpdate( _y, findTableRowById(id), 8 );
+                        $('#' + id + '_EDIT' ).css({top: _y - 255, left: _x + 25 });
+                        updateDBRow(id, "PUT");
+                    }
+                });
+                
+                var parentId = id;
+                $('#name' + id).change(function(event) {
+                    $('#dataTable').dataTable().fnUpdate( $(this).val(), findTableRowById(parentId), 1 );
+                    updatePosition(parentId);
+                });
+                $('#ip' + id).change(function(event) {
+                    $('#dataTable').dataTable().fnUpdate( $(this).val(), findTableRowById(parentId), 3 );
+                    updatePosition(parentId);
+                });                                
+                $('#location' + id ).autocomplete({
+                    source: availableTags,
+                    change: function( event, ui ) {
+                        $('#dataTable').dataTable().fnUpdate( $(this).val(), findTableRowById(parentId), 4 );
+                        updatePosition(parentId);
+                    }
+                });
+                $('#cleaned' + id).datepicker({
+                    onSelect: function(date){
+                        $('#dataTable').dataTable().fnUpdate( date, findTableRowById(parentId), 5);
+                        updatePosition(parentId);
+
+                    }                                    
+                });
+                $('#note' + id).change(function(event) {
+                    $('#dataTable').dataTable().fnUpdate( $(this).val(), findTableRowById(parentId), 6 );
+                        updatePosition(parentId);
+                    }
+                );
+                
+                if( data === undefined ) {
+                    //update DB
+                    var date = new Date();
+                    dateFormatted = (date.getMonth() + 1) + '/' + date.getDate() + '/' +  date.getFullYear();
+                    $('#dataTable').dataTable().fnAddData([
+                        id,
+                        '',
+                        type,
+                        '',
+                        'Gilbert',
+                        dateFormatted,
+                        '',
+                        x,
+                        y
+                    ]);
+                    updateDBRow(id, "POST");
+                }
+                else {
+                    $('#dataTable').dataTable().fnAddData([
+                        data._id, data.Name, data.Type,
+                        data.IP, data.Location, data.Cleaned,
+                        data.Notes, data.x, data.y
+                    ]);
+                    
+                    $('#name' + id).val(data.Name);
+                    $('#ip' + id).val(data.IP);
+                    $('#location' + id).val(data.Location);
+                    $('#cleaned' + id).val(data.Cleaned);
+                    $('#note' + id).val(data.Notes);
+                }
+                
+                ITEMCOUNT++;
+            };
+            var initializeMap = function() {
+                $('.item').remove();
+                //get all Devices in Gilbert
+                var url = BASE_URL + "?q={'Location': 'Gilbert'}&apiKey=" + API_KEY;
+                $.ajax( { 
+                    url: url,
+                    async: true,
+                    dataType: 'json',
+                    success: function(data) {
+                        ITEMCOUNT = 0;
+                         $('#dataTable').dataTable().fnClearTable();
+                         for( var i = 0; i < data.length; i++ ){
+                            addItem(data[i].Type, data[i]._id, data[i].x, data[i].y, data[i]);
+
+                         }
+                    },
+                    error: function(xhr, status, err) {
+                        console.log("An error has occured fetching the gilbert devices");   
+                    }
+                });
+            };
+        </script>
+    </head>
+    <body>
+        <!--<canvas id="canvas"></canvas>-->
+        <div id='locations'>
+            <span>
+                <!--<button id='gilbert'>Gilbert</button>-->
+                <button id='list'>List</button>
+                <p> Double click to edit</p>
+                <p> Drag to trash to delete</p>
+            </span>
+        </div>
+        <div id='CreateDiv'>
+            <span>
+                <image id='CreateComputer' class='computer createItem' src='images/computer.png'></image>
+                <image id='CreateScanner' class='scanner createItem' src='images/scanner.png'></image>
+                <image id='CreatePrinter' class='printer createItem' src='images/printer.png'></image>
+            </span>
+        </div>
+        <image src="images/GilbertOfficeMap.png" id="background"</image>
+        <image src="images/trash.png" id='trash'</image>
+        <div id='itemContainer'>
+            <div class='editItem' id='editItemDefault'>
+                <span><p>Name:<input type="text" id='nameInputDefault' class="nameInput" /></p></span>
+                <span><p>IP Address:<input type="text" id='ipInputDefault' class="ipInput" /></p></span>
+                <span><p>Location:<input type="text" id='locationInputDefault' class="autoComplete" /></p></span>
+                <span><p>Date Cleaned:<input type="text" class='datePicker'/></p></span>
+                <span class='lastP'><p>Note:<textarea rsows="3" type="text" id='noteInputDefault' class="noteInput"></textarea></p></span>
+            </div>
+        </div>
+        <div id='tableContainer'>
+            <table cellpadding="0" cellspacing="0" border="0" class="display" id="dataTable"/>
+            <image id="closeTable" src="" onmousedown='$("#tableContainer").hide()'/>
+        </div>
+    </body>
+</html>
